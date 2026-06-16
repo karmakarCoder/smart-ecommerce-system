@@ -68,31 +68,36 @@ export class AuthService {
       html: emailHtml,
     });
 
-    return { email: newUser.email, message: "OTP sent to your email successfully!" };
-
- 
+    return {
+      email: newUser.email,
+      message: "OTP sent to your email successfully!",
+    };
   }
 
   // verify OTP
 
   static async verifyOtp(email: string, otp: string) {
     if (!email || !otp) {
-      throw new Error('VALIDATION_ERROR: Email and OTP are required.')
+      throw new Error("VALIDATION_ERROR: Email and OTP are required.");
     }
 
-    const user = await prisma.user.findUnique({ where: { email } })
+    const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      throw new Error('NOT_FOUND: User not found.')
+      throw new Error("NOT_FOUND: User not found.");
     }
 
     if (user.isVerified) {
-      throw new Error('BAD_REQUEST: User is already verified.')
+      throw new Error("BAD_REQUEST: User is already verified.");
     }
 
     // Check if OTP matches and hasn't expired
-    if (user.otp !== otp || !user.otpExpiresAt || user.otpExpiresAt < new Date()) {
-      throw new Error('VALIDATION_ERROR: Invalid or expired OTP.')
+    if (
+      user.otp !== otp ||
+      !user.otpExpiresAt ||
+      user.otpExpiresAt < new Date()
+    ) {
+      throw new Error("VALIDATION_ERROR: Invalid or expired OTP.");
     }
 
     // Mark user as active, wipe OTP fields
@@ -103,10 +108,9 @@ export class AuthService {
         otp: null,
         otpExpiresAt: null,
       },
-    })
+    });
 
-
-       // Include the user image inside the token payload
+    // Include the user image inside the token payload
     const token = jwt.sign(
       {
         userId: user.id,
@@ -130,11 +134,9 @@ export class AuthService {
       },
       token,
     };
-  
   }
 
-
-   // login user
+  // login user
   static async login(data: { email: string; password: string }) {
     const email = data.email.toLowerCase().trim();
 
@@ -142,7 +144,7 @@ export class AuthService {
       where: { email },
     });
 
-    if(user && !user.isVerified) {
+    if (user && !user.isVerified) {
       throw new Error("Please verify your email before logging in.");
     }
 
@@ -175,12 +177,8 @@ export class AuthService {
         image: user.image,
         role: user.role,
         is_verified: user.isVerified,
-
       },
       token,
     };
   }
 }
-
- 
-

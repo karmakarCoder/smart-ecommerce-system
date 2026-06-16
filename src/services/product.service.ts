@@ -44,6 +44,15 @@ export class ProductService {
       include: {
         reviews: {
           orderBy: { createdAt: "desc" },
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+                image: true, 
+              },
+            },
+          },
         },
       },
       orderBy: { createdAt: "desc" },
