@@ -11,14 +11,24 @@ enum Role {
   ADMIN
 }
 
+enum ReviewStatus {
+  pending
+  approved
+  rejected
+}
+
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String
-  password  String
-  image     String?  
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  name         String
+  password     String
+  image        String?
+  isVerified   Boolean   @default(false)
+  otp          String?
+  otpExpiresAt DateTime?
+  role         Role      @default(USER)
+  createdAt    DateTime  @default(now())
+  reviews      Review[]
 }
 
 model Product {
@@ -29,6 +39,7 @@ model Product {
   price       Float
   status      String   @default("available")
   stock       Int      @default(0)
+  category    String?
   imageUrl    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -36,11 +47,14 @@ model Product {
 }
 
 model Review {
-  id        Int      @id @default(autoincrement())
-  rating    Int
-  comment   String?
-  reviewer  String   @default("Anonymous")
-  createdAt DateTime @default(now())
+  id         Int          @id @default(autoincrement())
+  rating     Int
+  comment    String?
+  reviewer   String       @default("Anonymous")
+  status     ReviewStatus @default(pending)
+  createdAt  DateTime     @default(now())
   product_id Int
-  product   Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  product    Product      @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  userId     Int?
+  user       User?         @relation(fields: [userId], references: [id])
 }
