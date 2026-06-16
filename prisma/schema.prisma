@@ -12,13 +12,16 @@ enum Role {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String
-  password  String
-  image     String?  
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
+  id             Int      @id @default(autoincrement())
+  email          String   @unique
+  name           String
+  password       String
+  image          String?
+  isVerified     Boolean   @default(false)
+  otp            String?
+  otpExpiresAt   DateTime?
+  role           Role     @default(USER)
+  createdAt      DateTime @default(now())
 }
 
 model Product {
