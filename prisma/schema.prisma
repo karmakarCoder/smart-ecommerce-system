@@ -39,6 +39,7 @@ model Product {
   price       Float
   status      String   @default("available")
   stock       Int      @default(0)
+  category    String?
   imageUrl    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

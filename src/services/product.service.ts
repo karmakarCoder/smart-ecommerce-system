@@ -1,6 +1,17 @@
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import fs from "fs/promises";
 import path from "path";
+
+interface SearchQueryParams {
+  query?: string;
+  category?: string;
+  min_price?: number;
+  max_price?: number;
+  sort_by?: string;
+  page?: number;
+  limit?: number;
+}
 
 export class ProductService {
   private static async handleImageUpload(
@@ -38,6 +49,126 @@ export class ProductService {
     return `${prefix}-${dateStamp}-${randomTail}`;
   }
 
+  // search products
+  static async searchProducts(params: SearchQueryParams) {
+    const {
+      query,
+      category,
+      min_price,
+      max_price,
+      sort_by = "createdAt",
+      page = 1,
+      limit = 10,
+    } = params;
+
+    // 1. Calculate pagination offset
+    const skip = (page - 1) * limit;
+
+    // 2. Dynamically build the Prisma WHERE clause conditional filters
+    const whereClause: Prisma.ProductWhereInput = {};
+
+    // Match text queries against both Name and Description
+    if (query) {
+      whereClause.OR = [
+        { name: { contains: query, mode: "insensitive" } },
+        { description: { contains: query, mode: "insensitive" } },
+      ];
+    }
+
+    // Filter by strict category matching
+    if (category) {
+      whereClause.category = { equals: category, mode: "insensitive" };
+    }
+
+    // Filter by min/max price thresholds
+    if (min_price !== undefined || max_price !== undefined) {
+      whereClause.price = {};
+      if (min_price !== undefined) whereClause.price.gte = min_price;
+      if (max_price !== undefined) whereClause.price.lte = max_price;
+    }
+
+    // 3. Dynamically resolve Sorting criteria
+    let orderByClause: Prisma.ProductOrderByWithRelationInput = {
+      createdAt: "desc",
+    };
+    if (sort_by === "price_asc") orderByClause = { price: "asc" };
+    if (sort_by === "price_desc") orderByClause = { price: "desc" };
+    if (sort_by === "rating")
+      orderByClause = {
+        reviews: {
+          _count: "desc",
+        },
+      };
+
+    const [rawProducts, totalCount] = await prisma.$transaction([
+      prisma.product.findMany({
+        where: whereClause,
+        orderBy: orderByClause,
+        skip,
+        take: limit,
+        include: {
+          reviews: {
+            orderBy: { createdAt: "desc" },
+            include: {
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                  image: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.product.count({ where: whereClause }),
+    ]);
+
+
+    const products = rawProducts.map((product) => {
+      const reviewsCount = product.reviews.length;
+      const avgRating =
+        reviewsCount > 0
+          ? Math.round(
+              product.reviews.reduce((sum, r) => sum + r.rating, 0) /
+                reviewsCount,
+            )
+          : 0;
+
+      return {
+        id: product.id,
+        name: product.name,
+        sku: product.sku,
+        description: product.description,
+        price: product.price,
+        status: product.status,
+        stock: product.stock,
+        category: product.category,
+        imageUrl: product.imageUrl,
+        createdAt: product.createdAt,
+        updatedAt: product.updatedAt,
+        rating: avgRating,
+        reviews: product.reviews, 
+        total_reviews: reviewsCount, 
+      };
+    });
+
+    // Calculate total pagination pages remaining
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      metadata: {
+        totalResults: totalCount,
+        currentPage: page,
+        totalPages,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+      products,
+    };
+  }
+
   // all product
   static async getAllProducts() {
     const products = await prisma.product.findMany({
@@ -49,7 +180,7 @@ export class ProductService {
               select: {
                 name: true,
                 email: true,
-                image: true, 
+                image: true,
               },
             },
           },
@@ -74,7 +205,7 @@ export class ProductService {
       return {
         ...product,
         total_reviews: totalReviews,
-        average_rating: averageRating,
+        rating: averageRating,
       };
     });
   }
@@ -129,6 +260,7 @@ export class ProductService {
     const imageFile = formData.get("image") as File | null;
     const status = formData.get("status") as string | null;
     const stock = formData.get("stock") as string | null;
+    const category = formData.get("category") as string | null;
 
     const price = parseFloat(priceRaw);
     const generatedSku = this.generateSKU(name);
@@ -152,6 +284,7 @@ export class ProductService {
         imageUrl: finalImageUrl || null,
         status: status || "available",
         stock: stock ? parseInt(stock, 10) : 0,
+        category: category || null,
       },
     });
   }
@@ -176,6 +309,7 @@ export class ProductService {
     const imageFile = formData.get("image") as File | null;
     const statusInput = formData.get("status") as string | null;
     const stockInput = formData.get("stock") as string | null;
+    const categoryInput = formData.get("category") as string | null;
 
     const name =
       nameInput && nameInput.trim() !== ""
@@ -209,6 +343,11 @@ export class ProductService {
         ? parseInt(stockInput, 10)
         : existingProduct.stock;
 
+    const category =
+      categoryInput !== null && categoryInput.trim() !== ""
+        ? categoryInput.trim()
+        : existingProduct.category;
+
     let finalImageUrl = existingProduct.imageUrl;
     let shouldDeleteOldImage = false;
 
@@ -233,6 +372,7 @@ export class ProductService {
         imageUrl: finalImageUrl,
         status,
         stock,
+        category: category || null,
       },
     });
 
